@@ -8,3 +8,4 @@ joblib
 matplotlib
 skforecast
 plotly
+google-genai
