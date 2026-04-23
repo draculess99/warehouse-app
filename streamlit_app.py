@@ -15,13 +15,20 @@ import os
 os.getcwd()
 
 
+# In[ ]:
+
+
+from google import genai
+import os
+
+
 # In[2]:
 
 
-os.getcwd()
+# os.chdir(r"D:\Work\Springboard\CAPSTONE-Final\TraininData\WORKTRAIN\WalmartBenchmark")
 
 
-# In[1]:
+# In[ ]:
 
 
 # ==========================================================
@@ -35,6 +42,48 @@ import pandas as pd
 import requests
 import plotly.express as px
 
+
+
+st.markdown("""
+<style>
+/* Target sidebar expander headers */
+section[data-testid="stSidebar"] div[data-testid="stExpander"] details {
+    border: 1px solid #8a6d1d;
+    border-radius: 10px;
+    background: rgba(138,109,29,0.18);
+    margin-bottom: 10px;
+}
+
+section[data-testid="stSidebar"] div[data-testid="stExpander"] summary {
+    background: rgba(138,109,29,0.35);
+    color: #ffd76a;
+    border-radius: 10px;
+    padding: 6px 10px;
+    font-weight: 600;
+}
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+<style>
+div.stButton > button:first-child {
+    background: linear-gradient(135deg,#198754,#157347);
+    color: white;
+    border-radius: 10px;
+    border: none;
+    padding: 0.55rem 1rem;
+    font-weight: 700;
+    width: 100%;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.25);
+}
+
+div.stButton > button:first-child:hover {
+    background: linear-gradient(135deg,#20a464,#198754);
+    color: white;
+}
+</style>
+""", unsafe_allow_html=True)
+
 # ----------------------------------------------------------
 # PAGE CONFIG
 # ----------------------------------------------------------
@@ -45,11 +94,156 @@ st.set_page_config(
 
 st.title("Warehouse Workforce Forecast Dashboard 2012")
 st.caption("Machine Learning Demand Forecasting + VET / VTO Recommendations")
+# ----------------------------------------------------------
+# LOAD SCENARIO CSV
+# ----------------------------------------------------------
+@st.cache_data
+def load_scenarios():
+    return pd.read_csv("scenario_templates.tsv", sep="\t")
+
+scenario_df = load_scenarios()
+
+# ----------------------------------------------------------
+# GEMINI HELPER FUNCTIONS
+# ----------------------------------------------------------
+def get_gemini_explanation(result_df, rec):
+    try:
+        from google import genai
+
+        client = genai.Client(
+		api_key=os.getenv("GEMINI_API_KEY")
+        )
+
+        # -----------------------------
+        # Metrics
+        # -----------------------------
+        total_cost = result_df["estimated_cost"].sum()
+        peak = result_df["predicted_demand"].max()
+        avg = result_df["predicted_demand"].mean()
+
+        peak_row = result_df.loc[
+            result_df["predicted_demand"].idxmax()
+        ]
+
+        peak_week = int(peak_row["week"])
+
+        demand_band = classify_demand_band(result_df)
+        cost_band = classify_cost_band(result_df)
+
+        action = rec["action"]
+        rule_text = rec["final_recommendation"]
+
+        # -----------------------------
+        # Prompt (highly controlled)
+        # -----------------------------
+        prompt = f"""
+You are a warehouse workforce planning analyst.
+
+Create a concise executive explanation.
+
+Forecast facts:
+- Peak week: Week {peak_week}
+- Peak forecast volume index: {peak:,.0f}
+- Average forecast volume index: {avg:,.0f}
+- Demand band: {demand_band}
+- Cost band: {cost_band}
+- Projected labor impact: ${total_cost:,.0f}
+- Recommended action: {action}
+
+Existing rule recommendation:
+{rule_text}
+
+Instructions:
+1. Write exactly 3 sentences.
+2. Use plain business English.
+3. Refer to demand as forecast volume, not units sold.
+4. If action is VET, recommend targeted overtime before peak week.
+5. If action is VTO, recommend reducing excess staffing carefully.
+6. If action is NORMAL, recommend monitoring and maintaining staffing.
+7. Mention labor cost discipline when cost band is High.
+8. Do not exaggerate or invent facts.
+"""
+
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt
+        )
+
+        return response.text.strip()
+
+    except Exception as e:
+        return f"Gemini unavailable: {str(e)}"
+
+# ----------------------------------------------------------
+# HELPER FUNCTIONS
+# ----------------------------------------------------------
+def classify_demand_band(result_df):
+    peak = result_df["predicted_demand"].max()
+    avg = result_df["predicted_demand"].mean()
+    recent = result_df["predicted_demand"].tail(4).mean()
+
+    score = (peak * 0.25) + (avg * 0.45) + (recent * 0.30)
+
+    q75 = result_df["predicted_demand"].quantile(0.75)
+    q25 = result_df["predicted_demand"].quantile(0.25)
+
+    if score >= q75:
+        return "High"
+    elif score <= q25:
+        return "Low"
+    else:
+        return "Normal"
+
+
+def classify_stress_band(v, s, c, l):
+    vals = [v, s, c, l]
+
+    if isinstance(v, list):
+        vals = v + s + c + l
+
+    score = max(vals)
+
+    if score >= 20:
+        return "High"
+    elif score >= 8:
+        return "Medium"
+    else:
+        return "Low"
+
+
+def classify_cost_band(result_df):
+    total_cost = result_df["estimated_cost"].sum()
+
+    if total_cost >= 25000:
+        return "High"
+    elif total_cost >= 10000:
+        return "Medium"
+    else:
+        return "Low"
+
+
+def get_scenario_row(demand_band, stress_band, cost_band):
+    row = scenario_df[
+        (scenario_df["demand_band"] == demand_band) &
+        (scenario_df["stress_band"] == stress_band) &
+        (scenario_df["cost_band"] == cost_band)
+    ]
+
+    if len(row) == 0:
+        return None
+
+    return row.iloc[0]
+
 
 # ----------------------------------------------------------
 # SIDEBAR
 # ----------------------------------------------------------
 st.sidebar.header("Scenario Inputs")
+
+# ----------------------------------------------------------
+# SECTION 1 - FORECAST SETUP
+# ----------------------------------------------------------
+st.sidebar.subheader("📅 Forecast Setup")
 
 # Weeks
 weeks = st.sidebar.slider("Forecast Horizon (Weeks)", 1, 43, 12)
@@ -60,22 +254,12 @@ mode = st.sidebar.radio(
     ["Simple Scenario", "Advanced Weekly Table"]
 )
 
-workers_per_unit = st.sidebar.number_input("Worker Per Unit", value=5000)
-overtime_labor_cost_per_worker = st.sidebar.number_input("Ovetime labor Cost/Hr Per Worker", value=30)
-hourly_labor_cost_per_worker = st.sidebar.number_input("Hourly labor Cost Per Worker", value=20)
+st.sidebar.markdown("---")
 
-# ----------------------------------------------------------
-# SIMPLE MODE
-# ----------------------------------------------------------
+# ------------------------------------------------
+# CONDITIONAL FIELDS
+# ------------------------------------------------
 if mode == "Simple Scenario":
-
-    temperature = st.sidebar.number_input("Temperature", value=45.0)
-    fuel_price = st.sidebar.number_input("Fuel Price", value=3.2)
-    cpi = st.sidebar.number_input("CPI", value=225.0)
-    unemployment = st.sidebar.number_input("Unemployment", value=6.5)
-    holiday = st.sidebar.selectbox("Holiday Week?", [0, 1])
-
-
 
     scenario_name = st.sidebar.text_input(
         "Scenario Name",
@@ -87,35 +271,105 @@ if mode == "Simple Scenario":
         value="REQ001"
     )
 
-    st.sidebar.subheader("Operational Stress Controls for Multi-Week Stress Simulation")
+else:
 
-    velocity_pct = st.sidebar.slider(
-        "Demand Velocity %",
-        -20,
-        20,
-        0
+    scenario_name = st.sidebar.text_input(
+        "Scenario Name",
+        value="Advanced Scenario"
     )
 
-    shipping_delay_pct = st.sidebar.slider(
-        "Shipping Delay %",
-        0,
-        30,
-        0
+    request_id = st.sidebar.text_input(
+        "Request ID",
+        value="REQ002"
+    )
+# ----------------------------------------------------------
+# SECTION 2 - LABOR PLANNING SETTINGS
+# ----------------------------------------------------------
+
+st.sidebar.subheader("👷 Labor Planning")
+
+workers_per_unit = st.sidebar.number_input(
+    "Units per Worker Capacity",
+    value=5000,
+    help="Estimated workload handled per worker"
+)
+
+overtime_labor_cost_per_worker = st.sidebar.number_input(
+    "Overtime Cost per Hour ($)",
+    value=30,
+    help="Estimated overtime labor rate"
+)
+
+hourly_labor_cost_per_worker = st.sidebar.number_input(
+    "Regular Labor Cost per Hour ($)",
+    value=20,
+    help="Standard hourly labor cost"
+)
+
+st.sidebar.markdown("---")
+
+# ----------------------------------------------------------
+# SIMPLE MODE
+# ----------------------------------------------------------
+if mode == "Simple Scenario":
+
+    # ----------------------------------------------------------
+    # SECTION 3 - ECONOMIC DRIVERS
+    # ----------------------------------------------------------
+    st.sidebar.subheader("📈 Economic Drivers")
+
+    temperature = st.sidebar.number_input(
+        "Temperature",
+        value=45.0
     )
 
-    congestion_pct = st.sidebar.slider(
-        "Warehouse Congestion %",
-        0,
-        30,
-        0
+    fuel_price = st.sidebar.number_input(
+        "Fuel Price",
+        value=3.20
     )
 
-    logistics_stress_pct = st.sidebar.slider(
-        "Logistics Stress %",
-        0,
-        30,
-        0
+    cpi = st.sidebar.number_input(
+        "CPI Index",
+        value=225.0
     )
+
+    unemployment = st.sidebar.number_input(
+        "Unemployment Rate (%)",
+        value=6.50
+    )
+
+    holiday = st.sidebar.selectbox(
+        "Holiday Demand Week",
+        [0, 1]
+    )
+
+    st.sidebar.markdown("---")
+
+    # ----------------------------------------------------------
+    # SECTION 4 - OPERATIONAL STRESS CONTROLS
+    # ----------------------------------------------------------
+    with st.sidebar.expander("⚙️ Advanced Scenario Stress Testing"):
+
+        velocity_pct = st.slider(
+            "Demand Velocity (%)",
+            -20, 20, 0
+        )
+
+        shipping_delay_pct = st.slider(
+            "Shipping Delay (%)",
+            0, 30, 0
+        )
+
+        congestion_pct = st.slider(
+            "Warehouse Congestion (%)",
+            0, 30, 0
+        )
+
+        logistics_stress_pct = st.slider(
+            "Logistics Stress (%)",
+            0, 30, 0
+        )
+        st.sidebar.markdown("---")
 
     payload = {
         "mode": "simple",
@@ -169,16 +423,6 @@ else:
         num_rows="fixed"
     )
 
-    scenario_name = st.sidebar.text_input(
-        "Scenario Name",
-        value="Advanced Scenario"
-    )
-
-    request_id = st.sidebar.text_input(
-        "Request ID",
-        value="REQ002"
-    )
-
     payload = {
         "mode": "advanced",
 
@@ -207,15 +451,15 @@ else:
 # ----------------------------------------------------------
 # RUN BUTTON
 # ----------------------------------------------------------
-if st.sidebar.button("Run Forecast"):
+if st.sidebar.button("🚀 Run Forecast"):
 
     try:
         # IMPORTANT:
         # Local:
-        #api_url = "http://localhost:5000/forecast"
+        api_url = "http://localhost:5000/forecast"
         #
         # Docker:
-        api_url = "https://warehouse-backend-n7on.onrender.com/forecast"
+        #api_url = "https://warehouse-backend-n7on.onrender.com/forecast"
 
         response = requests.post(api_url, json=payload)
 
@@ -421,31 +665,125 @@ if st.sidebar.button("Run Forecast"):
             # ------------------------------------------------------
             # RECOMMENDATIONS
             # ------------------------------------------------------
+            # ------------------------------------------------------
+            # RECOMMENDATIONS (SMART SCENARIO ENGINE)
+            # ------------------------------------------------------
             st.subheader("Operational Recommendations")
 
-            recommendations = data.get("recommendations", [])
+            # classify demand from forecast results
+            demand_band = classify_demand_band(result_df)
 
-            if len(recommendations) == 0:
-                st.info("No recommendations returned.")
+            # classify stress depending on mode
+            if mode == "Simple Scenario":
 
-            for rec in recommendations:
+                stress_band = classify_stress_band(
+                    velocity_pct,
+                    shipping_delay_pct,
+                    congestion_pct,
+                    logistics_stress_pct
+                )
 
-                txt = rec.lower()
+            else:
 
-                if "increase staffing" in txt:
-                    st.warning("⚠️ " + rec)
+                stress_band = classify_stress_band(
+                    edited_df["velocity_pct"].tolist(),
+                    edited_df["shipping_delay_pct"].tolist(),
+                    edited_df["congestion_pct"].tolist(),
+                    edited_df["logistics_stress_pct"].tolist()
+                )
 
-                elif "vto" in txt:
-                    st.success("💰 " + rec)
+            # classify cost
+            cost_band = classify_cost_band(result_df)
 
-                elif "highest demand" in txt or "peak" in txt:
-                    st.error("🔥 " + rec)
+            # lookup row from CSV
+            rec = get_scenario_row(
+                demand_band,
+                stress_band,
+                cost_band
+            )
 
-                elif "cost" in txt or "savings" in txt:
-                    st.info("📈 " + rec)
+            # show scenario summary
+            st.write(
+                f"Scenario: Demand={demand_band} | Stress={stress_band} | Cost={cost_band}"
+            )
+
+            # show smart recommendation
+            if rec is not None:
+
+                action = rec["action"]
+                severity = rec["severity"]
+
+                # -----------------------------------
+                # Card 1 Demand Alert
+                # -----------------------------------
+                if severity == "Critical":
+                    st.error("🔥 " + rec["short_message"])
+
+                elif severity == "Warning":
+                    st.warning("⚠️ " + rec["short_message"])
 
                 else:
-                    st.write("• " + rec)
+                    st.info("📊 " + rec["short_message"])
+
+                # -----------------------------------
+                # Card 2 Operational Guidance
+                # -----------------------------------
+                st.info("📈 " + rec["final_recommendation"])
+
+                # -----------------------------------
+                # Card 3 Cost Insight
+                # -----------------------------------
+                total_cost = result_df["estimated_cost"].sum()
+
+                st.info(
+                    f"💰 Projected total labor impact: ${total_cost:,.0f}"
+                )
+
+                # -----------------------------------
+                # Card 4 Action
+                # -----------------------------------
+                if action == "VET":
+                    st.success("✅ Recommended Action: Increase Staffing (VET)")
+
+                elif action == "VTO":
+                    st.warning("💤 Recommended Action: Offer Voluntary Time Off (VTO)")
+
+                else:
+                    st.info("🟦 Recommended Action: Maintain Current Staffing")
+
+                # -----------------------------------
+                # Card 5 Peak Week Alert
+                # -----------------------------------
+                peak_row = result_df.loc[
+                    result_df["predicted_demand"].idxmax()
+                ]
+
+                peak_week = int(peak_row["week"])
+
+                st.error(
+                    f"🔥 Highest demand expected in Week {peak_week}. Prepare early."
+                )
+
+                # -----------------------------------
+                # RULE ENGINE EXPLANATION
+                # -----------------------------------
+                with st.expander("### Rule Engine Interpretation"):
+                   st.info(rec["long_narrative"].replace(". ", ".\n\n"))
+
+                # -----------------------------------
+                # GEMINI EXPLANATION
+                # -----------------------------------
+                st.markdown("### Generative AI Decision Summary")
+
+                with st.spinner("Generating AI decision summary..."):
+                    gemini_text = get_gemini_explanation(result_df, rec)
+
+                gemini_text = gemini_text.replace(". ", ".\n\n")
+
+                st.success(gemini_text)
+
+            else:
+                st.info("No scenario matched.")
 
             # ------------------------------------------------------
             # RAW JSON (OPTIONAL)
@@ -459,10 +797,4 @@ if st.sidebar.button("Run Forecast"):
 
     except Exception as e:
         st.error(f"Could not connect to Flask API: {str(e)}")
-
-
-# In[ ]:
-
-
-
 
