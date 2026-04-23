@@ -798,6 +798,7 @@ if run_clicked:
 
         if "unavailable" in ai_summary.lower() or "busy" in ai_summary.lower():
             ai_summary = get_groq_explanation(result_df, rec)
+            ai_summary = ai_summary.replace(". ", ".\n\n")
             st.warning(ai_summary)
         else:
             ai_summary = ai_summary.replace(". ", ".\n\n")
