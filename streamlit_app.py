@@ -43,6 +43,9 @@ import requests
 import plotly.express as px
 
 
+# -----------------------------------
+# SESSION STATE INIT
+# -----------------------------------
 
 st.markdown("""
 <style>
@@ -93,7 +96,8 @@ st.set_page_config(
 )
 
 st.title("Warehouse Workforce Forecast Dashboard 2012")
-st.caption("Machine Learning Demand Forecasting + VET / VTO Recommendations")
+st.caption("Springboard Data Analytics Capstone Project • Forecasting VET/VTO decisions using retail demand proxy data • By WiL Low • 2026")
+
 # ----------------------------------------------------------
 # LOAD SCENARIO CSV
 # ----------------------------------------------------------
@@ -111,7 +115,7 @@ def get_gemini_explanation(result_df, rec):
         from google import genai
 
         client = genai.Client(
-		api_key=os.getenv("GEMINI_API_KEY")
+            api_key=os.getenv("GEMINI_API_KEY")
         )
 
         # -----------------------------
@@ -154,7 +158,7 @@ Existing rule recommendation:
 {rule_text}
 
 Instructions:
-1. Write exactly 3 sentences.
+1. Write exactly 5 sentences.
 2. Use plain business English.
 3. Refer to demand as forecast volume, not units sold.
 4. If action is VET, recommend targeted overtime before peak week.
@@ -173,6 +177,71 @@ Instructions:
 
     except Exception as e:
         return f"Gemini unavailable: {str(e)}"
+
+
+
+# ----------------------------------------------------------
+# GROQ HELPER FUNCTIONS
+# ----------------------------------------------------------
+def get_groq_explanation(result_df, rec):
+    try:
+        from groq import Groq
+        import streamlit as st
+
+        client = Groq(
+            api_key=os.getenv("GROQ_API_KEY")
+        )
+
+        total_cost = result_df["estimated_cost"].sum()
+        peak = result_df["predicted_demand"].max()
+        avg = result_df["predicted_demand"].mean()
+
+        peak_row = result_df.loc[
+            result_df["predicted_demand"].idxmax()
+        ]
+
+        peak_week = int(peak_row["week"])
+
+        demand_band = classify_demand_band(result_df)
+        cost_band = classify_cost_band(result_df)
+
+        action = rec["action"]
+
+        prompt = f"""
+You are a warehouse workforce planning analyst.
+
+Write exactly 5 short executive sentences.
+
+Peak week: {peak_week}
+Peak workload index: {peak:,.0f}
+Average workload index: {avg:,.0f}
+Demand band: {demand_band}
+Cost band: {cost_band}
+Projected labor impact: ${total_cost:,.0f}
+Recommended action: {action}
+
+Rules:
+- Use professional language
+- Mention staffing action
+- Mention cost discipline if High cost
+- Do not invent facts
+"""
+
+        completion = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            temperature=0.3
+        )
+
+        return completion.choices[0].message.content.strip()
+
+    except Exception as e:
+        return f"Groq unavailable: {str(e)}"
 
 # ----------------------------------------------------------
 # HELPER FUNCTIONS
@@ -448,15 +517,17 @@ else:
     }
     #st.write(payload["settings"])
 
+
 # ----------------------------------------------------------
 # RUN BUTTON
 # ----------------------------------------------------------
-if st.sidebar.button("🚀 Run Forecast"):
+run_clicked = st.sidebar.button("🚀 Run Forecast")
 
+if run_clicked:
     try:
         # IMPORTANT:
         # Local:
-        #api_url = "http://localhost:5000/forecast"
+        # api_url = "http://localhost:5000/forecast"
         #
         # Docker:
         api_url = "https://warehouse-backend-n7on.onrender.com/forecast"
@@ -465,336 +536,279 @@ if st.sidebar.button("🚀 Run Forecast"):
 
         if response.status_code == 200:
 
-            data = response.json()
-
             st.success("Forecast Completed")
-
-            # --------------------------------------------------
-            # Executive Summary
-            # --------------------------------------------------
-            st.subheader("Executive Summary")
-
-            col1, col2, col3, col4 = st.columns(4)
-
-            col1.metric("VET Weeks", data["summary"]["vet_weeks"])
-            col2.metric("VTO Weeks", data["summary"]["vto_weeks"])
-            col3.metric("Peak Week", data["summary"]["normal_weeks"])
-            col4.metric(
-                "Total Cost",
-                f'${data["summary"]["total_cost"]:,.0f}'
-            )
-
-            # --------------------------------------------------
-            # Output Table
-            # --------------------------------------------------
-            st.subheader("Forecast Output")
-
-            df_out = pd.DataFrame(data["forecast"])
-            result_df = pd.DataFrame(data["forecast"])
-
-            common_layout = dict(
-                height=260,
-                margin=dict(l=20, r=20, t=45, b=20),
-                title_x=0.0
-            )
-
-            #Demand Forecast Chart
-            fig1 = px.line(
-                result_df,
-                x="week",
-                y="predicted_demand",
-                markers=True,
-                title=f"{weeks} Week Demand Forecast"
-            )
-
-            #Cost Chart
-            fig2 = px.bar(
-                result_df,
-                x="week",
-                y="estimated_cost",
-                color="decision",
-                title="Weekly Labor Cost"
-            )
-
-            fig1.update_layout(**common_layout)
-            fig2.update_layout(**common_layout)
-
-            #Cost Cumulative Cost Chart
-            fig3 = px.line(
-                result_df,
-                x="week",
-                y="cumulative_future_cost",
-                markers=True,
-                title="Cumulative Future Cost"
-            )
-
-            fig3.update_layout(
-                height=260,
-                margin=dict(l=10, r=10, t=35, b=10)
-            )
-
-            # ==================================
-            # LAYOUT
-            # ==================================
-            col1, col2 = st.columns(2)
-
-            with col1:
-                st.plotly_chart(
-                    fig1,
-                    use_container_width=True
-                )
-
-            with col2:
-                st.plotly_chart(
-                    fig2,
-                    use_container_width=True
-                )
-
-            colA, colB, colC = st.columns([1,2,1])
-
-            with colB:
-                st.plotly_chart(fig3)
-
-            # st.dataframe(df_out, use_container_width=True)
-
-            with st.expander("Detailed Forecast Table"):
-                # st.dataframe(result_df)
-
-                styled_df = result_df.style.format({
-
-                    "week": "{:.0f}",
-                    "predicted_demand": "{:,.0f}",
-                    "estimated_cost": "${:,.0f}",
-                    "cumulative_future_cost": "${:,.0f}",
-                    "extra_workers_needed": "{:.0f}",
-                    "workers_to_reduce": "{:.0f}"
-
-                }).set_properties(
-
-                    subset=[
-                        "predicted_demand",
-                        "estimated_cost",
-                        "cumulative_future_cost",
-                        "extra_workers_needed",
-                        "workers_to_reduce"
-                    ],
-
-                    **{
-                        "text-align": "right"
-                    }
-
-                ).set_properties(
-
-                    subset=["week", "decision"],
-
-                    **{
-                            "text-align": "center"
-                    }
-
-                ).apply(
-
-                    lambda row: [
-
-                        (
-                            "background-color:#145a32;"
-                            "color:white;"
-                            "font-weight:bold;"
-                            "text-align:center;"
-                            "border-radius:4px;"
-
-                            if (col == "decision" and row["decision"] == "VET")
-
-                            else
-
-                            "background-color:#7d5a00;"
-                            "color:white;"
-                            "font-weight:bold;"
-                            "text-align:center;"
-                            "border-radius:4px;"
-
-                            if (col == "decision" and row["decision"] == "VTO")
-
-                            else
-
-                            "background-color:#444444;"
-                            "color:white;"
-                            "font-weight:bold;"
-                            "text-align:center;"
-                            "border-radius:4px;"
-
-                            if (col == "decision" and row["decision"] == "NORMAL")
-
-                            else ""
-
-                        )
-
-                        for col in row.index
-
-                    ],
-
-                    axis=1
-
-                ).set_table_styles([
-
-                    {
-                        "selector": "th",
-                        "props": [
-                            ("background-color", "#111111"),
-                            ("color", "white"),
-                            ("font-weight", "bold"),
-                            ("text-align", "center")
-                        ]
-                    },
-
-                    {
-                        "selector": "td",
-                        "props": [
-                            ("border", "1px solid #333333"),
-                            ("padding", "6px")
-                        ]
-                    }
-
-                ])
-
-                st.dataframe(
-                    styled_df,
-                    use_container_width=True,
-                    height=420
-                )
-
-            # ------------------------------------------------------
-            # RECOMMENDATIONS
-            # ------------------------------------------------------
-            # ------------------------------------------------------
-            # RECOMMENDATIONS (SMART SCENARIO ENGINE)
-            # ------------------------------------------------------
-            st.subheader("Operational Recommendations")
-
-            # classify demand from forecast results
-            demand_band = classify_demand_band(result_df)
-
-            # classify stress depending on mode
-            if mode == "Simple Scenario":
-
-                stress_band = classify_stress_band(
-                    velocity_pct,
-                    shipping_delay_pct,
-                    congestion_pct,
-                    logistics_stress_pct
-                )
-
-            else:
-
-                stress_band = classify_stress_band(
-                    edited_df["velocity_pct"].tolist(),
-                    edited_df["shipping_delay_pct"].tolist(),
-                    edited_df["congestion_pct"].tolist(),
-                    edited_df["logistics_stress_pct"].tolist()
-                )
-
-            # classify cost
-            cost_band = classify_cost_band(result_df)
-
-            # lookup row from CSV
-            rec = get_scenario_row(
-                demand_band,
-                stress_band,
-                cost_band
-            )
-
-            # show scenario summary
-            st.write(
-                f"Scenario: Demand={demand_band} | Stress={stress_band} | Cost={cost_band}"
-            )
-
-            # show smart recommendation
-            if rec is not None:
-
-                action = rec["action"]
-                severity = rec["severity"]
-
-                # -----------------------------------
-                # Card 1 Demand Alert
-                # -----------------------------------
-                if severity == "Critical":
-                    st.error("🔥 " + rec["short_message"])
-
-                elif severity == "Warning":
-                    st.warning("⚠️ " + rec["short_message"])
-
-                else:
-                    st.info("📊 " + rec["short_message"])
-
-                # -----------------------------------
-                # Card 2 Operational Guidance
-                # -----------------------------------
-                st.info("📈 " + rec["final_recommendation"])
-
-                # -----------------------------------
-                # Card 3 Cost Insight
-                # -----------------------------------
-                total_cost = result_df["estimated_cost"].sum()
-
-                st.info(
-                    f"💰 Projected total labor impact: ${total_cost:,.0f}"
-                )
-
-                # -----------------------------------
-                # Card 4 Action
-                # -----------------------------------
-                if action == "VET":
-                    st.success("✅ Recommended Action: Increase Staffing (VET)")
-
-                elif action == "VTO":
-                    st.warning("💤 Recommended Action: Offer Voluntary Time Off (VTO)")
-
-                else:
-                    st.info("🟦 Recommended Action: Maintain Current Staffing")
-
-                # -----------------------------------
-                # Card 5 Peak Week Alert
-                # -----------------------------------
-                peak_row = result_df.loc[
-                    result_df["predicted_demand"].idxmax()
-                ]
-
-                peak_week = int(peak_row["week"])
-
-                st.error(
-                    f"🔥 Highest demand expected in Week {peak_week}. Prepare early."
-                )
-
-                # -----------------------------------
-                # RULE ENGINE EXPLANATION
-                # -----------------------------------
-                with st.expander("### Rule Engine Interpretation"):
-                   st.info(rec["long_narrative"].replace(". ", ".\n\n"))
-
-                # -----------------------------------
-                # GEMINI EXPLANATION
-                # -----------------------------------
-                st.markdown("### Generative AI Decision Summary")
-
-                with st.spinner("Generating AI decision summary..."):
-                    gemini_text = get_gemini_explanation(result_df, rec)
-
-                gemini_text = gemini_text.replace(". ", ".\n\n")
-
-                st.success(gemini_text)
-
-            else:
-                st.info("No scenario matched.")
-
-            # ------------------------------------------------------
-            # RAW JSON (OPTIONAL)
-            # ------------------------------------------------------
-            with st.expander("View Raw JSON Response"):
-                st.json(data)
-
         else:
             st.error("Backend returned an error.")
 
+    except requests.exceptions.RequestException as e:
+        st.error(f"Could not connect to Flask API: {str(e)}")
 
     except Exception as e:
-        st.error(f"Could not connect to Flask API: {str(e)}")
+        st.error(f"Application error: {str(e)}")
+
+
+# ------------------------------------------------------
+# BLOCK 2 - DISPLAY SAVED RESULTS
+# ------------------------------------------------------
+    data = response.json()
+
+    # --------------------------------------------------
+    # Executive Summary
+    # --------------------------------------------------
+    st.subheader("Executive Summary")
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    col1.metric("VET Weeks", data["summary"]["vet_weeks"])
+    col2.metric("VTO Weeks", data["summary"]["vto_weeks"])
+    col3.metric("Peak Week", data["summary"]["normal_weeks"])
+    col4.metric(
+        "Total Cost",
+        f'${data["summary"]["total_cost"]:,.0f}'
+    )
+
+    # --------------------------------------------------
+    # Output Table
+    # --------------------------------------------------
+    st.subheader("Forecast Output")
+
+    result_df = pd.DataFrame(data["forecast"])
+
+    common_layout = dict(
+        height=260,
+        margin=dict(l=20, r=20, t=45, b=20),
+        title_x=0.0
+    )
+
+    # Demand Forecast Chart
+    fig1 = px.line(
+        result_df,
+        x="week",
+        y="predicted_demand",
+        markers=True,
+        title=f"{weeks} Week Demand Forecast"
+    )
+
+    # Cost Chart
+    fig2 = px.bar(
+        result_df,
+        x="week",
+        y="estimated_cost",
+        color="decision",
+        title="Weekly Labor Cost"
+    )
+
+    fig1.update_layout(**common_layout)
+    fig2.update_layout(**common_layout)
+
+    # Cumulative Cost Chart
+    fig3 = px.line(
+        result_df,
+        x="week",
+        y="cumulative_future_cost",
+        markers=True,
+        title="Cumulative Future Cost"
+    )
+
+    fig3.update_layout(
+        height=260,
+        margin=dict(l=10, r=10, t=35, b=10)
+    )
+
+    # ==================================
+    # LAYOUT
+    # ==================================
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.plotly_chart(fig1, use_container_width=True)
+
+    with col2:
+        st.plotly_chart(fig2, use_container_width=True)
+
+    colA, colB, colC = st.columns([1, 2, 1])
+
+    with colB:
+        st.plotly_chart(fig3, use_container_width=True)
+
+    with st.expander("Detailed Forecast Table"):
+        styled_df = result_df.style.format({
+            "week": "{:.0f}",
+            "predicted_demand": "{:,.0f}",
+            "estimated_cost": "${:,.0f}",
+            "cumulative_future_cost": "${:,.0f}",
+            "extra_workers_needed": "{:.0f}",
+            "workers_to_reduce": "{:.0f}"
+        }).set_properties(
+            subset=[
+                "predicted_demand",
+                "estimated_cost",
+                "cumulative_future_cost",
+                "extra_workers_needed",
+                "workers_to_reduce"
+            ],
+            **{"text-align": "right"}
+        ).set_properties(
+            subset=["week", "decision"],
+            **{"text-align": "center"}
+        ).apply(
+            lambda row: [
+                (
+                    "background-color:#145a32;"
+                    "color:white;"
+                    "font-weight:bold;"
+                    "text-align:center;"
+                    "border-radius:4px;"
+                    if (col == "decision" and row["decision"] == "VET")
+                    else
+                    "background-color:#7d5a00;"
+                    "color:white;"
+                    "font-weight:bold;"
+                    "text-align:center;"
+                    "border-radius:4px;"
+                    if (col == "decision" and row["decision"] == "VTO")
+                    else
+                    "background-color:#444444;"
+                    "color:white;"
+                    "font-weight:bold;"
+                    "text-align:center;"
+                    "border-radius:4px;"
+                    if (col == "decision" and row["decision"] == "NORMAL")
+                    else ""
+                )
+                for col in row.index
+            ],
+            axis=1
+        ).set_table_styles([
+            {
+                "selector": "th",
+                "props": [
+                    ("background-color", "#111111"),
+                    ("color", "white"),
+                    ("font-weight", "bold"),
+                    ("text-align", "center")
+                ]
+            },
+            {
+                "selector": "td",
+                "props": [
+                    ("border", "1px solid #333333"),
+                    ("padding", "6px")
+                ]
+            }
+        ])
+
+        st.dataframe(
+            styled_df,
+            use_container_width=True,
+            height=420
+        )
+
+    st.caption(
+    "Public Walmart weekly sales data is used as a proxy for operational demand. "
+    "Staffing outputs are scenario-based estimates using configurable capacity assumptions."
+)
+    # ------------------------------------------------------
+    # RECOMMENDATIONS (SMART SCENARIO ENGINE)
+    # ------------------------------------------------------
+    st.subheader("Operational Recommendations")
+
+    # classify demand from forecast results
+    demand_band = classify_demand_band(result_df)
+
+    # classify stress depending on mode
+    if mode == "Simple Scenario":
+        stress_band = classify_stress_band(
+            velocity_pct,
+            shipping_delay_pct,
+            congestion_pct,
+            logistics_stress_pct
+        )
+    else:
+        stress_band = classify_stress_band(
+            edited_df["velocity_pct"].tolist(),
+            edited_df["shipping_delay_pct"].tolist(),
+            edited_df["congestion_pct"].tolist(),
+            edited_df["logistics_stress_pct"].tolist()
+        )
+
+    # classify cost
+    cost_band = classify_cost_band(result_df)
+
+    # lookup row from CSV
+    rec = get_scenario_row(
+        demand_band,
+        stress_band,
+        cost_band
+    )
+
+    # show scenario summary
+    st.write(
+        f"Scenario: Demand={demand_band} | Stress={stress_band} | Cost={cost_band}"
+    )
+
+    if rec is not None:
+        action = rec["action"]
+        severity = rec["severity"]
+
+        # Card 1 Demand Alert
+        if severity == "Critical":
+            st.error("🔥 " + rec["short_message"])
+        elif severity == "Warning":
+            st.warning("⚠️ " + rec["short_message"])
+        else:
+            st.info("📊 " + rec["short_message"])
+
+        # Card 2 Operational Guidance
+        st.info("📈 " + rec["final_recommendation"])
+
+        # Card 3 Cost Insight
+        total_cost = result_df["estimated_cost"].sum()
+        st.info(f"💰 Projected total labor impact: ${total_cost:,.0f}")
+
+        # Card 4 Action
+        if action == "VET":
+            st.success("✅ Recommended Action: Increase Staffing (VET)")
+        elif action == "VTO":
+            st.warning("💤 Recommended Action: Offer Voluntary Time Off (VTO)")
+        else:
+            st.info("🟦 Recommended Action: Maintain Current Staffing")
+
+        # Card 5 Peak Week Alert
+        peak_row = result_df.loc[result_df["predicted_demand"].idxmax()]
+        peak_week = int(peak_row["week"])
+
+        st.error(f"🔥 Highest demand expected in Week {peak_week}. Prepare early.")
+
+        # Rule Engine Explanation
+        with st.expander("### Rule Engine Interpretation"):
+            st.info(rec["long_narrative"].replace(". ", ".\n\n"))
+
+        # -----------------------------------
+        # GEMINI HEADER
+        # -----------------------------------
+        title_col, btn_col, count_col = st.columns([8, 0.7, 1])
+
+        with title_col:
+            st.markdown("### AI Decision Summary")
+
+        # first load or retry
+        with st.spinner("Generating AI summary..."):
+                ai_summary = get_gemini_explanation(result_df, rec)
+
+        if "unavailable" in ai_summary.lower() or "busy" in ai_summary.lower():
+            ai_summary = get_groq_explanation(result_df, rec)
+            st.warning(ai_summary)
+        else:
+            ai_summary = ai_summary.replace(". ", ".\n\n")
+            st.success(ai_summary)
+
+    else:
+        st.info("No scenario matched.")
+
+    # ------------------------------------------------------
+    # RAW JSON (OPTIONAL)
+    # ------------------------------------------------------
+    with st.expander("View Raw JSON Response"):
+        st.json(data)
 
