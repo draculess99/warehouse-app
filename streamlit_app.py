@@ -115,6 +115,8 @@ def get_gemini_explanation(result_df, rec):
         from google import genai
 
         client = genai.Client(
+            # api_key="AIzaSyCehLTIw-Xm9LqFepsB2VJvpHHyDM7sPG4"
+            # later replace with:
             api_key=os.getenv("GEMINI_API_KEY")
         )
 
@@ -189,6 +191,8 @@ def get_groq_explanation(result_df, rec):
         import streamlit as st
 
         client = Groq(
+            # api_key="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"
+            # later replace with:
             api_key=os.getenv("GROQ_API_KEY")
         )
 
@@ -538,11 +542,15 @@ if run_clicked:
 
             st.success("Forecast Completed")
         else:
-            st.error("Backend returned an error.")
+            st.error(f"Backend error: {response.status_code}")
+            st.text(response.text)
+            st.stop()
 
     except requests.exceptions.RequestException as e:
         st.error(f"Could not connect to Flask API: {str(e)}")
-
+    st.error(f"Backend error: {response.status_code}")
+    st.text(response.text)
+    st.stop()
     except Exception as e:
         st.error(f"Application error: {str(e)}")
 
@@ -798,7 +806,7 @@ if run_clicked:
 
         if "unavailable" in ai_summary.lower() or "busy" in ai_summary.lower():
             ai_summary = get_groq_explanation(result_df, rec)
-            ai_summary = ai_summary.replace(". ", ".\n\n")
+	    ai_summary = ai_summary.replace(". ", ".\n\n")
             st.warning(ai_summary)
         else:
             ai_summary = ai_summary.replace(". ", ".\n\n")
