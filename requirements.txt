@@ -9,3 +9,4 @@ matplotlib
 skforecast
 plotly
 google-genai
+groq
