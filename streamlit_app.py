@@ -708,8 +708,8 @@ if run_clicked:
 
     st.caption(
     "Public Walmart weekly sales data is used as a proxy for operational demand. "
-    "Staffing outputs are scenario-based estimates using configurable capacity assumptions."
-)
+    "Staffing outputs are scenario-based estimates using configurable capacity assumptions.")
+	
     # ------------------------------------------------------
     # RECOMMENDATIONS (SMART SCENARIO ENGINE)
     # ------------------------------------------------------
