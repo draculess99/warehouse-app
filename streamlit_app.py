@@ -536,23 +536,29 @@ if run_clicked:
         # Docker:
         api_url = "https://warehouse-backend-n7on.onrender.com/forecast"
 
-        response = requests.post(api_url, json=payload)
+        response = requests.post(api_url, json=payload, timeout=60)
 
-        if response.status_code == 200:
-
-            st.success("Forecast Completed")
-        else:
+        if response.status_code != 200:
             st.error(f"Backend error: {response.status_code}")
             st.text(response.text)
             st.stop()
 
+        try:
+            data = response.json()
+        except:
+            st.error("Backend returned non-JSON response.")
+            st.text(response.text[:1000])
+            st.stop()
+
+        st.success("Forecast Completed")
+
     except requests.exceptions.RequestException as e:
-        st.error(f"Could not connect to Flask API: {str(e)}")
-    st.error(f"Backend error: {response.status_code}")
-    st.text(response.text)
-    st.stop()
+        st.error(f"Could not connect to backend: {str(e)}")
+        st.stop()
+
     except Exception as e:
         st.error(f"Application error: {str(e)}")
+        st.stop()
 
 
 # ------------------------------------------------------
