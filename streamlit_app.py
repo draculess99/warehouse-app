@@ -1,35 +1,8 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# # Run Streamllit App
-# 
-# ```bash
-# streamlit run streamlit_app.py
-# ```
-# 
-
-# In[1]:
-
-
-import os
-os.getcwd()
-
-
-# In[ ]:
-
-
 from google import genai
 import os
-
-
-# In[2]:
-
-
-# os.chdir(r"D:\Work\Springboard\CAPSTONE-Final\TraininData\WORKTRAIN\WalmartBenchmark")
-
-
-# In[ ]:
-
 
 # ==========================================================
 # streamlit_app.py
