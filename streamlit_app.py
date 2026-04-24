@@ -115,8 +115,6 @@ def get_gemini_explanation(result_df, rec):
         from google import genai
 
         client = genai.Client(
-            # api_key="AIzaSyCehLTIw-Xm9LqFepsB2VJvpHHyDM7sPG4"
-            # later replace with:
             api_key=os.getenv("GEMINI_API_KEY")
         )
 
@@ -191,8 +189,6 @@ def get_groq_explanation(result_df, rec):
         import streamlit as st
 
         client = Groq(
-            # api_key="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"
-            # later replace with:
             api_key=os.getenv("GROQ_API_KEY")
         )
 
@@ -531,34 +527,25 @@ if run_clicked:
     try:
         # IMPORTANT:
         # Local:
-        # api_url = "http://localhost:5000/forecast"
+        #api_url = "http://localhost:5000/forecast"
         #
         # Docker:
         api_url = "https://warehouse-backend-n7on.onrender.com/forecast"
 
-        response = requests.post(api_url, json=payload, timeout=60)
+        response = requests.post(api_url, json=payload)
 
-        if response.status_code != 200:
-            st.error(f"Backend error: {response.status_code}")
-            st.text(response.text)
-            st.stop()
+        if response.status_code == 200:
 
-        try:
-            data = response.json()
-        except:
-            st.error("Backend returned non-JSON response.")
-            st.text(response.text[:1000])
-            st.stop()
-
-        st.success("Forecast Completed")
+            st.success("Forecast Completed")
+        else:
+            st.error("Backend returned an error.")
+	    st.text(response.text[:1000])
 
     except requests.exceptions.RequestException as e:
-        st.error(f"Could not connect to backend: {str(e)}")
-        st.stop()
+        st.error(f"Could not connect to Flask API: {str(e)}")
 
     except Exception as e:
         st.error(f"Application error: {str(e)}")
-        st.stop()
 
 
 # ------------------------------------------------------
@@ -812,7 +799,7 @@ if run_clicked:
 
         if "unavailable" in ai_summary.lower() or "busy" in ai_summary.lower():
             ai_summary = get_groq_explanation(result_df, rec)
-	        ai_summary = ai_summary.replace(". ", ".\n\n")
+            ai_summary = ai_summary.replace(". ", ".\n\n")
             st.warning(ai_summary)
         else:
             ai_summary = ai_summary.replace(". ", ".\n\n")
