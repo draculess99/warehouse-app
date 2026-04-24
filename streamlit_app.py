@@ -115,7 +115,9 @@ def get_gemini_explanation(result_df, rec):
         from google import genai
 
         client = genai.Client(
-            api_key=os.getenv("GEMINI_API_KEY")
+            api_key="AIzaSyCehLTIw-Xm9LqFepsB2VJvpHHyDM7sPG4"
+            # later replace with:
+            # api_key=os.getenv("GEMINI_API_KEY")
         )
 
         # -----------------------------
@@ -189,7 +191,9 @@ def get_groq_explanation(result_df, rec):
         import streamlit as st
 
         client = Groq(
-            api_key=os.getenv("GROQ_API_KEY")
+            api_key="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"
+                        # later replace with:
+            # api_key=os.getenv("GROQ_API_KEY")
         )
 
         total_cost = result_df["estimated_cost"].sum()
@@ -527,20 +531,18 @@ if run_clicked:
     try:
         # IMPORTANT:
         # Local:
-        #api_url = "http://localhost:5000/forecast"
+        api_url = "http://localhost:5000/forecast"
         #
         # Docker:
-        api_url = "https://warehouse-backend-n7on.onrender.com/forecast"
+        # api_url = "https://warehouse-backend-n7on.onrender.com/forecast"
 
         response = requests.post(api_url, json=payload)
 
         if response.status_code == 200:
-
-			st.success("Forecast Completed")
+            st.success("Forecast Completed")
         else:
-		    st.error("Backend returned an error.")
-			st.text(response.text[:1000])
-			st.stop()
+            st.text(response.text[:1000])
+            st.error("Backend returned an error.")
 
     except requests.exceptions.RequestException as e:
         st.error(f"Could not connect to Flask API: {str(e)}")
@@ -548,10 +550,9 @@ if run_clicked:
     except Exception as e:
         st.error(f"Application error: {str(e)}")
 
-
-# ------------------------------------------------------
-# BLOCK 2 - DISPLAY SAVED RESULTS
-# ------------------------------------------------------
+    # ------------------------------------------------------
+    # BLOCK 2 - DISPLAY SAVED RESULTS
+    # ------------------------------------------------------
     data = response.json()
 
     # --------------------------------------------------
@@ -708,8 +709,8 @@ if run_clicked:
 
     st.caption(
     "Public Walmart weekly sales data is used as a proxy for operational demand. "
-    "Staffing outputs are scenario-based estimates using configurable capacity assumptions.")
-	
+    "Staffing outputs are scenario-based estimates using configurable capacity assumptions."
+)
     # ------------------------------------------------------
     # RECOMMENDATIONS (SMART SCENARIO ENGINE)
     # ------------------------------------------------------
