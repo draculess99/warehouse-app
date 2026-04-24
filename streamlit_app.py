@@ -42,6 +42,16 @@ import pandas as pd
 import requests
 import plotly.express as px
 
+# ----------------------------------------------------------
+# PAGE CONFIG
+# ----------------------------------------------------------
+st.set_page_config(
+    page_title="Warehouse Workforce Forecast Dashboard 2012",
+    layout="wide"
+)
+
+st.title("Warehouse Workforce Forecast Dashboard 2012")
+st.caption("Springboard Data Analytics Capstone Project • Forecasting VET/VTO decisions using retail demand proxy data • By WiL Low • 2026")
 
 # -----------------------------------
 # SESSION STATE INIT
@@ -86,17 +96,6 @@ div.stButton > button:first-child:hover {
 }
 </style>
 """, unsafe_allow_html=True)
-
-# ----------------------------------------------------------
-# PAGE CONFIG
-# ----------------------------------------------------------
-st.set_page_config(
-    page_title="Warehouse Workforce Forecast Dashboard 2012",
-    layout="wide"
-)
-
-st.title("Warehouse Workforce Forecast Dashboard 2012")
-st.caption("Springboard Data Analytics Capstone Project • Forecasting VET/VTO decisions using retail demand proxy data • By WiL Low • 2026")
 
 # ----------------------------------------------------------
 # LOAD SCENARIO CSV
