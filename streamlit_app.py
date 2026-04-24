@@ -87,9 +87,7 @@ def get_gemini_explanation(result_df, rec):
         from google import genai
 
         client = genai.Client(
-            api_key="AIzaSyCehLTIw-Xm9LqFepsB2VJvpHHyDM7sPG4"
-            # later replace with:
-            # api_key=os.getenv("GEMINI_API_KEY")
+            api_key=os.getenv("GEMINI_API_KEY")
         )
 
         # -----------------------------
@@ -163,9 +161,7 @@ def get_groq_explanation(result_df, rec):
         import streamlit as st
 
         client = Groq(
-            api_key="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"
-                        # later replace with:
-            # api_key=os.getenv("GROQ_API_KEY")
+            api_key=os.getenv("GROQ_API_KEY")
         )
 
         total_cost = result_df["estimated_cost"].sum()
