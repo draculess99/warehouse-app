@@ -538,8 +538,8 @@ if run_clicked:
 
             st.success("Forecast Completed")
         else:
-            st.error("Backend returned an error.")
-	        st.text(response.text[:1000])
+		    st.error("Backend returned an error.")
+			st.text(response.text[:1000])
 			st.stop()
 
     except requests.exceptions.RequestException as e:
