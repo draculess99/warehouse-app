@@ -536,7 +536,7 @@ if run_clicked:
 
         if response.status_code == 200:
 
-            st.success("Forecast Completed")
+			st.success("Forecast Completed")
         else:
 		    st.error("Backend returned an error.")
 			st.text(response.text[:1000])
