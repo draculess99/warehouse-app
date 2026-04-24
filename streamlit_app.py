@@ -543,6 +543,7 @@ if run_clicked:
         else:
             st.text(response.text[:1000])
             st.error("Backend returned an error.")
+            st.stop()
 
     except requests.exceptions.RequestException as e:
         st.error(f"Could not connect to Flask API: {str(e)}")
