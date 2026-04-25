@@ -1,8 +1,10 @@
-#!/usr/bin/env python
-# coding: utf-8
+# # Run Streamllit App
+# 
+# ```bash
+# streamlit run streamlit_app.py
+# ```
+# 
 
-from google import genai
-import os
 
 # ==========================================================
 # streamlit_app.py
@@ -441,6 +443,28 @@ if mode == "Simple Scenario":
 # ----------------------------------------------------------
 else:
 
+    with st.sidebar.expander("⚙️ Advanced Scenario Stress Testing"):
+
+        velocity_pct_default = st.slider(
+            "Demand Velocity (%)",
+            -20, 20, 0
+        )
+
+        shipping_delay_default = st.slider(
+            "Shipping Delay (%)",
+            0, 30, 0
+        )
+
+        congestion_default = st.slider(
+            "Warehouse Congestion (%)",
+            0, 30, 0
+        )
+
+        logistics_stress_default = st.slider(
+            "Logistics Stress (%)",
+            0, 30, 0
+        )
+
     st.subheader("Advanced Weekly Scenario Table")
 
     default_df = pd.DataFrame({
@@ -452,10 +476,10 @@ else:
         "unemployment": [6.5] * weeks,
         "isholiday": [0] * weeks,
 
-        "velocity_pct": [0] * weeks,
-        "shipping_delay_pct": [0] * weeks,
-        "congestion_pct": [0] * weeks,
-        "logistics_stress_pct": [0] * weeks
+        "velocity_pct": [velocity_pct_default] * weeks,
+        "shipping_delay_pct": [shipping_delay_default] * weeks,
+        "congestion_pct": [congestion_default] * weeks,
+        "logistics_stress_pct": [logistics_stress_default] * weeks
     })
 
     edited_df = st.data_editor(
