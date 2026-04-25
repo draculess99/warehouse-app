@@ -12,6 +12,7 @@
 # FULL VERSION with SIMPLE + ADVANCED WEEKLY TABLE MODE
 # ==========================================================
 
+import os
 import streamlit as st
 import pandas as pd
 import requests
