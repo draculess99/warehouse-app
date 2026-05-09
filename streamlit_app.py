@@ -1,18 +1,9 @@
-# # Run Streamllit App
-# 
-# ```bash
-# streamlit run streamlit_app.py
-# ```
-# 
-
-
 # ==========================================================
 # streamlit_app.py
 # Warehouse Workforce Forecast Dashboard
 # FULL VERSION with SIMPLE + ADVANCED WEEKLY TABLE MODE
 # ==========================================================
 
-import os
 import streamlit as st
 import pandas as pd
 import requests
@@ -23,7 +14,8 @@ import plotly.express as px
 # ----------------------------------------------------------
 st.set_page_config(
     page_title="Warehouse Workforce Forecast Dashboard 2012",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="collapsed"
 )
 
 st.title("Warehouse Workforce Forecast Dashboard 2012")
@@ -85,19 +77,35 @@ scenario_df = load_scenarios()
 # ----------------------------------------------------------
 # GEMINI HELPER FUNCTIONS
 # ----------------------------------------------------------
-def get_gemini_explanation(result_df, rec):
+# ----------------------------------------------------------
+# GEMINI HELPER FUNCTIONS
+# ----------------------------------------------------------
+def get_gemini_explanation(
+    result_df,
+    rec,
+    stress_band,
+    velocity_pct,
+    shipping_delay_pct,
+    congestion_pct,
+    logistics_stress_pct
+):
+
     try:
+
         from google import genai
+        import os
 
         client = genai.Client(
             api_key=os.getenv("GEMINI_API_KEY")
         )
 
         # -----------------------------
-        # Metrics
+        # Forecast Metrics
         # -----------------------------
         total_cost = result_df["estimated_cost"].sum()
+
         peak = result_df["predicted_demand"].max()
+
         avg = result_df["predicted_demand"].mean()
 
         peak_row = result_df.loc[
@@ -107,40 +115,76 @@ def get_gemini_explanation(result_df, rec):
         peak_week = int(peak_row["week"])
 
         demand_band = classify_demand_band(result_df)
+
         cost_band = classify_cost_band(result_df)
 
         action = rec["action"]
+
         rule_text = rec["final_recommendation"]
 
         # -----------------------------
-        # Prompt (highly controlled)
+        # Operational Stress Summary
+        # -----------------------------
+        if isinstance(velocity_pct, list):
+            avg_velocity = sum(velocity_pct) / len(velocity_pct)
+            avg_shipping = sum(shipping_delay_pct) / len(shipping_delay_pct)
+            avg_congestion = sum(congestion_pct) / len(congestion_pct)
+            avg_logistics = sum(logistics_stress_pct) / len(logistics_stress_pct)
+        else:
+            avg_velocity = velocity_pct
+            avg_shipping = shipping_delay_pct
+            avg_congestion = congestion_pct
+            avg_logistics = logistics_stress_pct
+
+        # -----------------------------
+        # Controlled Prompt
         # -----------------------------
         prompt = f"""
-You are a warehouse workforce planning analyst.
+You are an operations forecasting analyst for a warehouse workforce planning system.
 
-Create a concise executive explanation.
+Your role is to explain forecast results clearly to warehouse leadership.
 
-Forecast facts:
-- Peak week: Week {peak_week}
-- Peak forecast volume index: {peak:,.0f}
-- Average forecast volume index: {avg:,.0f}
-- Demand band: {demand_band}
-- Cost band: {cost_band}
-- Projected labor impact: ${total_cost:,.0f}
-- Recommended action: {action}
+You MUST only use the supplied metrics.
+Do NOT invent trends, causes, percentages, or operational assumptions.
 
-Existing rule recommendation:
+FORECAST METRICS
+
+- Peak forecast week: Week {peak_week}
+- Peak forecast demand index: {peak:,.0f}
+- Average forecast demand index: {avg:,.0f}
+- Demand classification: {demand_band}
+- Labor cost classification: {cost_band}
+- Projected labor cost impact: ${total_cost:,.0f}
+- Recommended staffing action: {action}
+
+OPERATIONAL STRESS METRICS
+
+- Operational stress level: {stress_band}
+- Demand velocity pressure: {avg_velocity:.1f}%
+- Shipping delay pressure: {avg_shipping:.1f}%
+- Warehouse congestion pressure: {avg_congestion:.1f}%
+- Logistics stress pressure: {avg_logistics:.1f}%
+
+RULE-BASED RECOMMENDATION
+
 {rule_text}
 
-Instructions:
+RESPONSE REQUIREMENTS
+
 1. Write exactly 5 sentences.
-2. Use plain business English.
-3. Refer to demand as forecast volume, not units sold.
-4. If action is VET, recommend targeted overtime before peak week.
-5. If action is VTO, recommend reducing excess staffing carefully.
-6. If action is NORMAL, recommend monitoring and maintaining staffing.
-7. Mention labor cost discipline when cost band is High.
-8. Do not exaggerate or invent facts.
+2. Use professional operations language.
+3. Refer to demand as forecast demand or workload.
+4. Do NOT mention AI, models, algorithms, or predictions.
+5. Do NOT exaggerate urgency.
+6. If operational stress is High, mention operational coordination and backlog risk carefully.
+7. If action is VET:
+   recommend targeted overtime planning before peak demand periods.
+8. If action is VTO:
+   recommend reducing excess staffing cautiously to avoid understaffing.
+9. If action is NORMAL:
+   recommend maintaining current staffing strategy with continued monitoring.
+10. Mention labor cost discipline if cost band is High.
+11. Keep the tone concise, executive, and operational.
 """
 
         response = client.models.generate_content(
@@ -151,24 +195,43 @@ Instructions:
         return response.text.strip()
 
     except Exception as e:
-        return f"Gemini unavailable: {str(e)}"
 
+        return f"Gemini unavailable: {str(e)}"
 
 
 # ----------------------------------------------------------
 # GROQ HELPER FUNCTIONS
 # ----------------------------------------------------------
-def get_groq_explanation(result_df, rec):
+# ----------------------------------------------------------
+# GROQ HELPER FUNCTIONS
+# ----------------------------------------------------------
+def get_groq_explanation(
+    result_df,
+    rec,
+    stress_band,
+    velocity_pct,
+    shipping_delay_pct,
+    congestion_pct,
+    logistics_stress_pct
+):
+
     try:
+
         from groq import Groq
-        import streamlit as st
+        import os
 
         client = Groq(
             api_key=os.getenv("GROQ_API_KEY")
         )
 
+        # -----------------------------------
+        # Forecast Metrics
+        # -----------------------------------
+
         total_cost = result_df["estimated_cost"].sum()
+
         peak = result_df["predicted_demand"].max()
+
         avg = result_df["predicted_demand"].mean()
 
         peak_row = result_df.loc[
@@ -178,44 +241,109 @@ def get_groq_explanation(result_df, rec):
         peak_week = int(peak_row["week"])
 
         demand_band = classify_demand_band(result_df)
+
         cost_band = classify_cost_band(result_df)
 
         action = rec["action"]
 
+        # -----------------------------------
+        # Stress Metrics
+        # -----------------------------------
+
+        if isinstance(velocity_pct, list):
+
+            avg_velocity = sum(velocity_pct) / len(velocity_pct)
+
+            avg_shipping = (
+                sum(shipping_delay_pct) /
+                len(shipping_delay_pct)
+            )
+
+            avg_congestion = (
+                sum(congestion_pct) /
+                len(congestion_pct)
+            )
+
+            avg_logistics = (
+                sum(logistics_stress_pct) /
+                len(logistics_stress_pct)
+            )
+
+        else:
+
+            avg_velocity = velocity_pct
+
+            avg_shipping = shipping_delay_pct
+
+            avg_congestion = congestion_pct
+
+            avg_logistics = logistics_stress_pct
+
+        # -----------------------------------
+        # Prompt
+        # -----------------------------------
+
         prompt = f"""
-You are a warehouse workforce planning analyst.
+You are an operations forecasting analyst for a warehouse workforce planning system.
 
-Write exactly 5 short executive sentences.
+Your role is to explain workforce planning results clearly to warehouse leadership.
 
-Peak week: {peak_week}
-Peak workload index: {peak:,.0f}
-Average workload index: {avg:,.0f}
-Demand band: {demand_band}
-Cost band: {cost_band}
-Projected labor impact: ${total_cost:,.0f}
-Recommended action: {action}
+You MUST only use the supplied metrics.
+Do NOT invent operational causes, percentages, or assumptions.
 
-Rules:
-- Use professional language
-- Mention staffing action
-- Mention cost discipline if High cost
-- Do not invent facts
+FORECAST METRICS
+
+- Peak forecast week: Week {peak_week}
+- Peak workload index: {peak:,.0f}
+- Average workload index: {avg:,.0f}
+- Demand classification: {demand_band}
+- Labor cost classification: {cost_band}
+- Projected labor cost impact: ${total_cost:,.0f}
+- Recommended staffing action: {action}
+
+OPERATIONAL STRESS METRICS
+
+- Operational stress level: {stress_band}
+- Demand velocity pressure: {avg_velocity:.1f}%
+- Shipping delay pressure: {avg_shipping:.1f}%
+- Warehouse congestion pressure: {avg_congestion:.1f}%
+- Logistics stress pressure: {avg_logistics:.1f}%
+
+RESPONSE REQUIREMENTS
+
+1. Write exactly 5 concise executive sentences.
+2. Use professional warehouse operations language.
+3. Refer to demand as forecast demand or workload.
+4. Do NOT mention AI, algorithms, models, or predictions.
+5. If operational stress is High, mention coordination pressure and workload balancing carefully.
+6. If action is VET:
+   recommend targeted overtime planning before peak workload periods.
+7. If action is VTO:
+   recommend cautious labor reduction to avoid operational instability.
+8. If action is NORMAL:
+   recommend maintaining staffing levels with continued monitoring.
+9. Mention labor cost discipline if labor cost classification is High.
+10. Keep the tone operational, realistic, and concise.
 """
 
         completion = client.chat.completions.create(
+
             model="llama-3.3-70b-versatile",
+
             messages=[
                 {
                     "role": "user",
                     "content": prompt
                 }
             ],
+
             temperature=0.3
         )
 
         return completion.choices[0].message.content.strip()
 
     except Exception as e:
+
         return f"Groq unavailable: {str(e)}"
 
 # ----------------------------------------------------------
@@ -361,54 +489,54 @@ if mode == "Simple Scenario":
     # SECTION 3 - ECONOMIC DRIVERS
     # ----------------------------------------------------------
     st.sidebar.subheader("📈 Economic Drivers")
-
+    
     temperature = st.sidebar.number_input(
         "Temperature",
         value=45.0
     )
-
+    
     fuel_price = st.sidebar.number_input(
         "Fuel Price",
         value=3.20
     )
-
+    
     cpi = st.sidebar.number_input(
         "CPI Index",
         value=225.0
     )
-
+    
     unemployment = st.sidebar.number_input(
         "Unemployment Rate (%)",
         value=6.50
     )
-
+    
     holiday = st.sidebar.selectbox(
         "Holiday Demand Week",
         [0, 1]
     )
-
+    
     st.sidebar.markdown("---")
 
     # ----------------------------------------------------------
     # SECTION 4 - OPERATIONAL STRESS CONTROLS
     # ----------------------------------------------------------
     with st.sidebar.expander("⚙️ Advanced Scenario Stress Testing"):
-
+    
         velocity_pct = st.slider(
             "Demand Velocity (%)",
             -20, 20, 0
         )
-
+    
         shipping_delay_pct = st.slider(
             "Shipping Delay (%)",
             0, 30, 0
         )
-
+    
         congestion_pct = st.slider(
             "Warehouse Congestion (%)",
             0, 30, 0
         )
-
+    
         logistics_stress_pct = st.slider(
             "Logistics Stress (%)",
             0, 30, 0
@@ -417,7 +545,7 @@ if mode == "Simple Scenario":
 
     payload = {
         "mode": "simple",
-
+        
         "request_id": request_id,
         "scenario_name": scenario_name,
         "weeks": weeks,
@@ -450,33 +578,33 @@ else:
             "Demand Velocity (%)",
             -20, 20, 0
         )
-
+    
         shipping_delay_default = st.slider(
             "Shipping Delay (%)",
             0, 30, 0
         )
-
+    
         congestion_default = st.slider(
             "Warehouse Congestion (%)",
             0, 30, 0
         )
-
+    
         logistics_stress_default = st.slider(
             "Logistics Stress (%)",
             0, 30, 0
         )
-
+    
     st.subheader("Advanced Weekly Scenario Table")
 
     default_df = pd.DataFrame({
         "week": range(1, weeks + 1),
-
+    
         "temperature": [45.0] * weeks,
         "fuel_price": [3.2] * weeks,
         "cpi": [225.0] * weeks,
         "unemployment": [6.5] * weeks,
         "isholiday": [0] * weeks,
-
+    
         "velocity_pct": [velocity_pct_default] * weeks,
         "shipping_delay_pct": [shipping_delay_default] * weeks,
         "congestion_pct": [congestion_default] * weeks,
@@ -491,7 +619,7 @@ else:
 
     payload = {
         "mode": "advanced",
-
+        
         "request_id": request_id,
         "scenario_name": scenario_name,
         "weeks": weeks,
@@ -791,10 +919,28 @@ if run_clicked:
 
         # first load or retry
         with st.spinner("Generating AI summary..."):
-                ai_summary = get_gemini_explanation(result_df, rec)
+                #ai_summary = get_gemini_explanation(result_df, rec)
+                ai_summary = get_gemini_explanation(
+                    result_df,
+                    rec,
+                    stress_band,
+                    velocity_pct if mode == "Simple Scenario" else edited_df["velocity_pct"].tolist(),
+                    shipping_delay_pct if mode == "Simple Scenario" else edited_df["shipping_delay_pct"].tolist(),
+                    congestion_pct if mode == "Simple Scenario" else edited_df["congestion_pct"].tolist(),
+                    logistics_stress_pct if mode == "Simple Scenario" else edited_df["logistics_stress_pct"].tolist()
+                )
 
         if "unavailable" in ai_summary.lower() or "busy" in ai_summary.lower():
-            ai_summary = get_groq_explanation(result_df, rec)
+            #ai_summary = get_groq_explanation(result_df, rec)
+            ai_summary = get_groq_explanation(
+                result_df,
+                rec,
+                stress_band,
+                velocity_pct if mode == "Simple Scenario" else edited_df["velocity_pct"].tolist(),
+                shipping_delay_pct if mode == "Simple Scenario" else edited_df["shipping_delay_pct"].tolist(),
+                congestion_pct if mode == "Simple Scenario" else edited_df["congestion_pct"].tolist(),
+                logistics_stress_pct if mode == "Simple Scenario" else edited_df["logistics_stress_pct"].tolist()
+            )
             ai_summary = ai_summary.replace(". ", ".\n\n")
             st.warning(ai_summary)
         else:
@@ -809,4 +955,3 @@ if run_clicked:
     # ------------------------------------------------------
     with st.expander("View Raw JSON Response"):
         st.json(data)
-
