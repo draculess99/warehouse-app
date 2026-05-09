@@ -114,6 +114,88 @@ def get_gemini_explanation(
 
         peak_week = int(peak_row["week"])
 
+                # -----------------------------
+        # Forecast Trend Direction
+        # -----------------------------
+
+        trend_pct = (
+            (
+                result_df["predicted_demand"].iloc[-1]
+                -
+                result_df["predicted_demand"].iloc[0]
+            )
+            /
+            result_df["predicted_demand"].iloc[0]
+        ) * 100
+
+        if trend_pct > 5:
+            trend_direction = "Rising"
+
+        elif trend_pct < -5:
+            trend_direction = "Declining"
+
+        else:
+            trend_direction = "Stable"
+
+        # -----------------------------
+        # Forecast Volatility
+        # -----------------------------
+
+        volatility = (
+            result_df["predicted_demand"].std()
+            /
+            result_df["predicted_demand"].mean()
+        ) * 100
+
+        if volatility > 8:
+            volatility_band = "High"
+
+        elif volatility > 4:
+            volatility_band = "Moderate"
+
+        else:
+            volatility_band = "Low"
+
+        # -----------------------------
+        # Consecutive Decision Streaks
+        # -----------------------------
+
+        max_vet_streak = 0
+        current_vet = 0
+
+        for d in result_df["decision"]:
+
+            if d == "VET":
+
+                current_vet += 1
+
+                max_vet_streak = max(
+                    max_vet_streak,
+                    current_vet
+                )
+
+            else:
+
+                current_vet = 0
+
+        max_vto_streak = 0
+        current_vto = 0
+
+        for d in result_df["decision"]:
+
+            if d == "VTO":
+
+                current_vto += 1
+
+                max_vto_streak = max(
+                    max_vto_streak,
+                    current_vto
+                )
+
+            else:
+
+                current_vto = 0
+
         demand_band = classify_demand_band(result_df)
 
         cost_band = classify_cost_band(result_df)
@@ -164,6 +246,13 @@ OPERATIONAL STRESS METRICS
 - Shipping delay pressure: {avg_shipping:.1f}%
 - Warehouse congestion pressure: {avg_congestion:.1f}%
 - Logistics stress pressure: {avg_logistics:.1f}%
+
+FORECAST INTELLIGENCE METRICS
+
+- Forecast trend direction: {trend_direction}
+- Forecast volatility level: {volatility_band}
+- Maximum consecutive VET weeks: {max_vet_streak}
+- Maximum consecutive VTO weeks: {max_vto_streak}
 
 RULE-BASED RECOMMENDATION
 
@@ -240,6 +329,88 @@ def get_groq_explanation(
 
         peak_week = int(peak_row["week"])
 
+                # -----------------------------
+        # Forecast Trend Direction
+        # -----------------------------
+
+        trend_pct = (
+            (
+                result_df["predicted_demand"].iloc[-1]
+                -
+                result_df["predicted_demand"].iloc[0]
+            )
+            /
+            result_df["predicted_demand"].iloc[0]
+        ) * 100
+
+        if trend_pct > 5:
+            trend_direction = "Rising"
+
+        elif trend_pct < -5:
+            trend_direction = "Declining"
+
+        else:
+            trend_direction = "Stable"
+
+        # -----------------------------
+        # Forecast Volatility
+        # -----------------------------
+
+        volatility = (
+            result_df["predicted_demand"].std()
+            /
+            result_df["predicted_demand"].mean()
+        ) * 100
+
+        if volatility > 8:
+            volatility_band = "High"
+
+        elif volatility > 4:
+            volatility_band = "Moderate"
+
+        else:
+            volatility_band = "Low"
+
+        # -----------------------------
+        # Consecutive Decision Streaks
+        # -----------------------------
+
+        max_vet_streak = 0
+        current_vet = 0
+
+        for d in result_df["decision"]:
+
+            if d == "VET":
+
+                current_vet += 1
+
+                max_vet_streak = max(
+                    max_vet_streak,
+                    current_vet
+                )
+
+            else:
+
+                current_vet = 0
+
+        max_vto_streak = 0
+        current_vto = 0
+
+        for d in result_df["decision"]:
+
+            if d == "VTO":
+
+                current_vto += 1
+
+                max_vto_streak = max(
+                    max_vto_streak,
+                    current_vto
+                )
+
+            else:
+
+                current_vto = 0
+
         demand_band = classify_demand_band(result_df)
 
         cost_band = classify_cost_band(result_df)
@@ -308,6 +479,13 @@ OPERATIONAL STRESS METRICS
 - Shipping delay pressure: {avg_shipping:.1f}%
 - Warehouse congestion pressure: {avg_congestion:.1f}%
 - Logistics stress pressure: {avg_logistics:.1f}%
+
+FORECAST INTELLIGENCE METRICS
+
+- Forecast trend direction: {trend_direction}
+- Forecast volatility level: {volatility_band}
+- Maximum consecutive VET weeks: {max_vet_streak}
+- Maximum consecutive VTO weeks: {max_vto_streak}
 
 RESPONSE REQUIREMENTS
 
