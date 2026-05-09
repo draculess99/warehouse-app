@@ -867,6 +867,97 @@ if run_clicked:
         cost_band
     )
 
+    # ------------------------------------------------------
+    # ALIGN FINAL ACTION WITH WEEKLY FORECAST
+    # ------------------------------------------------------
+
+    vet_weeks = (
+        result_df["decision"] == "VET"
+    ).sum()
+
+    vto_weeks = (
+        result_df["decision"] == "VTO"
+    ).sum()
+
+    normal_weeks = (
+        result_df["decision"] == "NORMAL"
+    ).sum()
+
+    # Majority VET weeks
+    if vet_weeks >= (weeks * 0.6):
+
+        rec["action"] = "VET"
+
+        rec["severity"] = "Critical"
+
+        rec["short_message"] = (
+            "Sustained elevated workload detected across forecast horizon."
+        )
+
+        rec["final_recommendation"] = (
+            "Maintain proactive overtime staffing plans "
+            "to support forecast workload requirements."
+        )
+
+        rec["long_narrative"] = (
+            "The forecast indicates sustained elevated workload "
+            "conditions across the planning horizon. "
+            "Operational planning should prioritize proactive "
+            "overtime scheduling and workforce coordination "
+            "to maintain throughput stability and reduce backlog risk."
+        )
+
+    # Majority VTO weeks
+    elif vto_weeks >= (weeks * 0.6):
+
+        rec["action"] = "VTO"
+
+        rec["severity"] = "Warning"
+
+        rec["short_message"] = (
+            "Sustained excess labor capacity detected."
+        )
+
+        rec["final_recommendation"] = (
+            "Use selective VTO and tighter labor scheduling "
+            "to reduce excess labor costs."
+        )
+
+        rec["long_narrative"] = (
+            "The forecast indicates sustained periods of excess "
+            "labor capacity across the planning horizon. "
+            "Operations leadership should consider selective "
+            "VTO strategies and tighter scheduling discipline "
+            "to control labor costs while maintaining staffing flexibility."
+        )
+
+    # Majority NORMAL weeks
+    else:
+
+        rec["action"] = "NORMAL"
+
+        rec["severity"] = "Info"
+
+        rec["short_message"] = (
+            "Forecast workload remains operationally stable."
+        )
+
+        rec["final_recommendation"] = (
+            "Maintain current staffing strategy with continued monitoring."
+        )
+
+        rec["long_narrative"] = (
+            "The forecast indicates relatively balanced workload "
+            "conditions across the planning horizon. "
+            "Current staffing levels appear sufficient, "
+            "though operational monitoring should continue "
+            "to identify emerging workload changes."
+        )
+
+    # ------------------------------------------------------
+    # SHOW SCENARIO SUMMARY
+    # ------------------------------------------------------
+
     # show scenario summary
     st.write(
         f"Scenario: Demand={demand_band} | Stress={stress_band} | Cost={cost_band}"
