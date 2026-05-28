@@ -641,6 +641,13 @@ else:
         "Request ID",
         value="REQ002"
     )
+
+st.sidebar.markdown(
+    """
+    [Clean GitHub Portfolio Repo](https://github.com/draculess99/VET-VTO-Forecasting)
+    """
+)
+
 # ----------------------------------------------------------
 # SECTION 2 - LABOR PLANNING SETTINGS
 # ----------------------------------------------------------
