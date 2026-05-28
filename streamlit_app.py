@@ -21,6 +21,15 @@ st.set_page_config(
 st.title("Warehouse Workforce Forecast Dashboard 2012")
 st.caption("Springboard Data Analytics Capstone Project • Forecasting VET/VTO decisions using retail demand proxy data • By WiL Low • 2026")
 
+st.markdown(
+    """
+    ### Project Portfolio
+
+    This live demo is part of an AI-powered warehouse workforce forecasting and VET/VTO optimization project.
+
+    [View the clean GitHub portfolio repository](https://github.com/draculess99/VET-VTO-Forecasting)
+    """
+)
 # -----------------------------------
 # SESSION STATE INIT
 # -----------------------------------
