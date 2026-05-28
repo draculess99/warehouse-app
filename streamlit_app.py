@@ -18,12 +18,10 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-st.title("Warehouse Workforce Forecast Dashboard 2012")
-st.markdown(
-    """
-    Springboard Data Analytics capstone demo for AI-powered warehouse workforce forecasting and VET/VTO optimization.  
-    [View the cleaned GitHub portfolio repository](https://github.com/draculess99/VET-VTO-Forecasting).
-    """
+st.title("Warehouse Workforce Forecast Dashboard")
+
+st.caption(
+    "2026 Springboard Data Analytics Capstone Demo • AI-powered warehouse workforce forecasting and VET/VTO optimization • Uses 2012 forecast scenario data"
 )
 
 # -----------------------------------
